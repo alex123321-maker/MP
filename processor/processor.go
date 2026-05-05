@@ -219,7 +219,7 @@ func paintBordersWorker(
 				}
 				xx := x + dx
 				np := yy*w + xx
-				if topMask[np] == mark {
+				if topMask[np] != mark {
 					isBorder = true
 					break
 				}
