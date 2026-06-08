@@ -8,6 +8,7 @@ This repository contains source code for laboratory works.
 - `lab2` - GPU video processing benchmark with CUDA and OpenCL kernels.
 - `lab3` - distributed MPI web parsing for Wikipedia element pages.
 - `lab4` - multiprocessing multi-agent city traffic simulation.
+- `lab5` - asynchronous aggregation gateway with adaptive balancing.
 
 Generated videos, benchmark outputs, profiling files, reports and task documents are intentionally excluded from the repository.
 
@@ -36,5 +37,10 @@ Lab 4:
 
 - Python 3.11+
 - Python packages from `lab4/requirements.txt`
+
+Lab 5:
+
+- Python 3.10+
+- Python packages from `lab5/requirements.txt`
 
 See each lab directory for run commands.
