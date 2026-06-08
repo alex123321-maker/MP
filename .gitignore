@@ -10,6 +10,7 @@
 *.log
 __pycache__/
 .ipynb_checkpoints/
+.cache/
 
 # Video and benchmark outputs
 *.mp4
@@ -18,6 +19,7 @@ __pycache__/
 *.mkv
 bench_runs/
 lab2_results/
+lab3_results/
 assets/
 out/
 videos/
