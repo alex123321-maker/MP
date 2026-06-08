@@ -1,1 +1,38 @@
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+
+# Runtime/profiling artifacts
+*.pprof
+*.log
+__pycache__/
+.ipynb_checkpoints/
+
+# Video and benchmark outputs
 *.mp4
+*.avi
+*.mov
+*.mkv
+bench_runs/
+lab2_results/
+assets/
+out/
+videos/
+
+# Reports and task documents are kept outside the code repository
+*.docx
+*.pdf
+
+# Python environments
+.venv/
+venv/
+env/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,7 @@
+numpy
+pandas
+matplotlib
+opencv-python-headless
+pyopencl
+cupy-cuda12x[ctk]
+psutil
