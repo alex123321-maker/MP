@@ -78,7 +78,7 @@ def choose_clusters(df, out_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     metrics: dict[str, list[dict[str, float]]] = {"kmeans": [], "bisecting": [], "gmm": []}
     best_models: dict[str, Any] = {}
     best_scores: dict[str, tuple[int, float]] = {}
-    for k in range(2, 9):
+    for k in range(2, 11):
         kmeans = KMeans(k=k, seed=7, maxIter=30, featuresCol="features").fit(df)
         pred = kmeans.transform(df)
         sil = evaluator.evaluate(pred)
@@ -105,6 +105,7 @@ def choose_clusters(df, out_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
             best_models["gmm"] = gmm
 
     draw_metric_plot(out_dir / "cluster_metrics.png", metrics)
+    draw_cost_plot(out_dir / "cluster_costs.png", metrics)
     return metrics, {"scores": best_scores, "models": best_models}
 
 
@@ -223,8 +224,11 @@ def draw_metric_plot(path: Path, metrics: dict[str, list[dict[str, float]]]) -> 
     all_vals = [row["silhouette"] for rows in metrics.values() for row in rows]
     ymin, ymax = min(all_vals) * 0.95, max(all_vals) * 1.05
 
+    k_values = [int(row["k"]) for row in next(iter(metrics.values()))]
+    k_min, k_max = min(k_values), max(k_values)
+
     def px(k: int) -> float:
-        return left + (k - 2) / 6 * (right - left)
+        return left + (k - k_min) / (k_max - k_min) * (right - left)
 
     def py(v: float) -> float:
         return bottom - (v - ymin) / (ymax - ymin) * (bottom - top)
@@ -235,10 +239,87 @@ def draw_metric_plot(path: Path, metrics: dict[str, list[dict[str, float]]]) -> 
         for x, y in pts:
             draw.ellipse([x - 4, y - 4, x + 4, y + 4], fill=colors[name])
         draw.text((right - 160, top + 20 + 18 * list(metrics).index(name)), name, fill=colors[name], font=font)
-    for k in range(2, 9):
+    for k in k_values:
         draw.text((px(k) - 5, bottom + 15), str(k), fill="black", font=font)
     draw.text((width // 2 - 110, 18), "Silhouette by k", fill="black", font=font)
     draw.text((width // 2 - 10, height - 35), "k", fill="black", font=font)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path)
+
+
+def draw_cost_plot(path: Path, metrics: dict[str, list[dict[str, float]]]) -> None:
+    width, height = 1100, 620
+    img = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default()
+    left, top, right, bottom = 80, 50, width - 40, height - 90
+    draw.rectangle([left, top, right, bottom], outline="black")
+    colors = {"kmeans": (40, 100, 200), "bisecting": (40, 160, 80), "gmm": (220, 110, 40)}
+    series = {
+        "kmeans": [row["wssse"] for row in metrics["kmeans"]],
+        "bisecting": [row["wssse"] for row in metrics["bisecting"]],
+        "gmm": [row["log_likelihood"] for row in metrics["gmm"]],
+    }
+    k_values = [int(row["k"]) for row in next(iter(metrics.values()))]
+    k_min, k_max = min(k_values), max(k_values)
+
+    def px(k: int) -> float:
+        return left + (k - k_min) / (k_max - k_min) * (right - left)
+
+    def py(name: str, value: float) -> float:
+        values = series[name]
+        min_v, max_v = min(values), max(values)
+        if max_v == min_v:
+            return (top + bottom) / 2
+        normalized = (value - min_v) / (max_v - min_v)
+        return bottom - normalized * (bottom - top)
+
+    for name, rows in metrics.items():
+        value_key = "log_likelihood" if name == "gmm" else "wssse"
+        pts = [(px(int(row["k"])), py(name, row[value_key])) for row in rows]
+        draw.line(pts, fill=colors[name], width=3)
+        for x, y in pts:
+            draw.ellipse([x - 4, y - 4, x + 4, y + 4], fill=colors[name])
+        label = f"{name}: {'log-likelihood' if name == 'gmm' else 'WSSSE'}"
+        draw.text((right - 230, top + 20 + 18 * list(metrics).index(name)), label, fill=colors[name], font=font)
+    for k in k_values:
+        draw.text((px(k) - 5, bottom + 15), str(k), fill="black", font=font)
+    draw.text((width // 2 - 170, 18), "Cluster selection metrics by k", fill="black", font=font)
+    draw.text((width // 2 - 10, height - 35), "k", fill="black", font=font)
+    draw.text((left, height - 62), "Each line is min-max scaled independently for visual comparison.", fill="black", font=font)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path)
+
+
+def draw_cluster_profile_chart(path: Path, rows: list[dict[str, Any]]) -> None:
+    width, height = 1100, 640
+    img = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default()
+    left, top, right, bottom = 170, 70, width - 40, height - 90
+    draw.text((width // 2 - 170, 22), "Average numeric features by cluster", fill="black", font=font)
+    features = NUMERIC
+    values = {feature: [float(row[f"avg_{feature}"]) for row in rows] for feature in features}
+    mins = {feature: min(vals) for feature, vals in values.items()}
+    maxs = {feature: max(vals) for feature, vals in values.items()}
+    cell_w = (right - left) / len(features)
+    cell_h = (bottom - top) / len(rows)
+    for i, row in enumerate(rows):
+        y0 = top + i * cell_h
+        draw.text((28, y0 + cell_h / 2 - 6), f"cluster {row['cluster']} ({row['size']})", fill="black", font=font)
+        for j, feature in enumerate(features):
+            x0 = left + j * cell_w
+            value = float(row[f"avg_{feature}"])
+            span = maxs[feature] - mins[feature]
+            norm = 0.5 if span == 0 else (value - mins[feature]) / span
+            shade = 245 - int(150 * norm)
+            fill = (shade, 235, 255 - int(70 * norm))
+            draw.rectangle([x0, y0, x0 + cell_w, y0 + cell_h], fill=fill, outline=(210, 210, 210))
+            draw.text((x0 + 8, y0 + cell_h / 2 - 6), f"{value:.1f}", fill="black", font=font)
+    for j, feature in enumerate(features):
+        x0 = left + j * cell_w
+        draw.text((x0 + 8, top - 24), feature, fill="black", font=font)
+    draw.text((left, height - 54), "Darker cells indicate higher values within the same feature column.", fill="black", font=font)
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path)
 
@@ -332,6 +413,7 @@ def main() -> None:
         cluster_model = best["models"]["kmeans"]
         clustered = cluster_model.transform(prepared).withColumnRenamed("prediction", "cluster").withColumn("label", F.col("cluster").cast("double")).cache()
         cluster_summary = interpret_clusters(clustered)
+        draw_cluster_profile_chart(out_dir / "cluster_profiles.png", cluster_summary)
         save_pca_plot(clustered, out_dir)
         classifier_rows, confusion = train_classifiers(clustered, out_dir)
         payload = {
